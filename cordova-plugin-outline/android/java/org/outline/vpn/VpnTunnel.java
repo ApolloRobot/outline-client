@@ -40,6 +40,7 @@ public class VpnTunnel {
   private static final int DNS_RESOLVER_PORT = 53;
   private static final int TRANSPARENT_DNS_ENABLED = 1;
   private static final int SOCKS5_UDP_ENABLED = 1;
+  private static final int SOCKS5_UDP_DISABLED = 0;
 
   private final VpnTunnelService vpnService;
   private String dnsResolverAddress;
@@ -65,7 +66,7 @@ public class VpnTunnel {
    *
    * @return boolean indicating whether the VPN was successfully established.
    */
-  public boolean establishVpn() {
+  public synchronized boolean establishVpn() {
     LOG.info("Establishing the VPN.");
     try {
       dnsResolverAddress = selectDnsResolverAddress();
@@ -86,7 +87,7 @@ public class VpnTunnel {
   }
 
   /* Stops routing device traffic through the VPN. */
-  public void tearDownVpn() {
+  public synchronized void tearDownVpn() {
     LOG.info("Tearing down the VPN.");
     if (tunFd == null) {
       return;
@@ -105,11 +106,13 @@ public class VpnTunnel {
    * native library.
    *
    * @param socksServerAddress IP address of the SOCKS server.
+   * @param remoteUdpForwardingEnabled whether the remote server supports UDP forwarding.
    * @throws IllegalArgumentException if |socksServerAddress| is null.
    * @throws IllegalStateException if the VPN has not been established, or the tunnel is already
    *     connected.
    */
-  public void connectTunnel(final String socksServerAddress) {
+  public synchronized void connectTunnel(
+      final String socksServerAddress, boolean remoteUdpForwardingEnabled) {
     LOG.info("Connecting the tunnel.");
     if (socksServerAddress == null) {
       throw new IllegalArgumentException("Must provide an IP address to a SOCKS server.");
@@ -128,16 +131,19 @@ public class VpnTunnel {
             Tun2SocksJni.start(tunFd.getFd(), VPN_INTERFACE_MTU,
                 String.format(Locale.ROOT, VPN_INTERFACE_PRIVATE_LAN, "2"), // Router IP address
                 VPN_INTERFACE_NETMASK, socksServerAddress,
-                socksServerAddress, // UDP relay IP address
-                String.format(Locale.ROOT, "%s:%d", dnsResolverAddress, DNS_RESOLVER_PORT),
-                TRANSPARENT_DNS_ENABLED, SOCKS5_UDP_ENABLED);
+                remoteUdpForwardingEnabled ? socksServerAddress : null, // UDP relay IP address
+                remoteUdpForwardingEnabled
+                    ? String.format(Locale.ROOT, "%s:%d", dnsResolverAddress, DNS_RESOLVER_PORT)
+                    : null,
+                TRANSPARENT_DNS_ENABLED,
+                remoteUdpForwardingEnabled ? SOCKS5_UDP_ENABLED : SOCKS5_UDP_DISABLED);
           }
         };
     tun2socksThread.start();
   }
 
   /* Disconnects a tunnel created by a previous call to |connectTunnel|. */
-  public void disconnectTunnel() {
+  public synchronized void disconnectTunnel() {
     LOG.info("Disconnecting the tunnel.");
     if (tun2socksThread == null) {
       return;
