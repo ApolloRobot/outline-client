@@ -316,7 +316,8 @@ function startTun2socks(host: string, onDisconnected: () => void): Promise<void>
     //   --tundev "tap0901:outline-tap0:10.0.85.2:10.0.85.0:255.255.255.0" \
     //   --netif-ipaddr 10.0.85.1 --netif-netmask 255.255.255.0 \
     //   --socks-server-addr 127.0.0.1:1081 \
-    //   --socks5-udp --udp-relay-addr 127.0.0.1:1081
+    //   --socks5-udp --udp-relay-addr 127.0.0.1:1081 \
+    //   --transparent-dns
     const args: string[] = [];
     args.push(
         '--tundev',
@@ -325,9 +326,11 @@ function startTun2socks(host: string, onDisconnected: () => void): Promise<void>
     args.push('--netif-ipaddr', TUN2SOCKS_VIRTUAL_ROUTER_IP);
     args.push('--netif-netmask', TUN2SOCKS_VIRTUAL_ROUTER_NETMASK);
     args.push('--socks-server-addr', `${PROXY_IP}:${SS_LOCAL_PORT}`);
+    // TODO(alalama): don't pass UDP options when the remote doesn't support UDP forwarding.
     args.push('--socks5-udp');
     args.push('--udp-relay-addr', `${PROXY_IP}:${SS_LOCAL_PORT}`);
     args.push('--loglevel', 'error');
+    args.push('--transparent-dns');
 
     // TODO: Duplicate ss-local's error handling.
     try {
